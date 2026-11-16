@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Njoro Pro</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Chakra+Petch:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: neon terminal. Header, chart with Over/Under buttons docked beneath it, trade inputs, live digit, settings, log. */
+:root {
+  --bg: #04060c; --panel: rgba(12, 18, 33, .78); --ink: #e8f1ff; --muted: #8193b2;
+  --line: rgba(110, 170, 255, .16); --line-strong: rgba(25, 227, 255, .38);
+  --cyan: #19e3ff; --violet: #8b5cff;
+  --up: #2dffb0; --down: #ff3d81; --flat: #6b7a96; --warn: #ffb347; --surface: #0a0f1c;
+  --font-display: "Orbitron", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(900px 500px at 85% -10%, rgba(139, 92, 255, .22), transparent 60%),
+    radial-gradient(800px 500px at -10% 10%, rgba(25, 227, 255, .14), transparent 60%),
+    linear-gradient(rgba(110, 170, 255, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110, 170, 255, .045) 1px, transparent 1px);
+  background-size: auto, auto, 36px 36px, 36px 36px;
+  background-attachment: fixed;
+  color: var(--ink); font: 15px/1.45 var(--font-body);
+  padding-block: 14px 36px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+h1 {
+  font: 800 26px/1 var(--font-display); margin: 0; letter-spacing: .12em; text-transform: uppercase;
+  background: linear-gradient(90deg, var(--cyan), var(--violet)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 12px rgba(25, 227, 255, .35));
+}
+.tag { display: block; font: 400 10px var(--font-data); letter-spacing: .3em; color: var(--muted); margin-top: 6px; -webkit-text-fill-color: var(--muted); }
+.pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill {
+  font: 600 11px/1 var(--font-data); letter-spacing: .06em; text-transform: uppercase;
+  padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+  display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
+}
+.pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--flat); display: block; flex: none; }
+.pill.live { color: var(--up); border-color: rgba(45, 255, 176, .4); } .pill.live i { background: var(--up); box-shadow: 0 0 8px var(--up); animation: pulse 1.8s ease-in-out infinite; }
+.pill.sim { color: var(--cyan); } .pill.sim i { background: var(--cyan); }
+.pill.err { color: var(--down); border-color: rgba(255, 61, 129, .4); } .pill.err i { background: var(--down); }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pill.live i { animation: none; } * { transition: none !important; } }
+
+select, button, input {
+  font: 500 14px var(--font-body); color: var(--ink); background: rgba(6, 10, 20, .8);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-height: 42px;
+}
+input { width: 100%; font-family: var(--font-data); font-size: 13px; }
+input:focus, select:focus { border-color: var(--line-strong); outline: none; box-shadow: 0 0 0 3px rgba(25, 227, 255, .12); }
+select { flex: 1 1 180px; min-width: 0; }
+button { cursor: pointer; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button:focus-visible, summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: rgba(6, 10, 20, .8); }
+.seg button { border: 0; border-radius: 0; background: transparent; padding: 9px 14px; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: linear-gradient(180deg, rgba(25, 227, 255, .22), rgba(139, 92, 255, .22)); color: var(--ink); box-shadow: inset 0 -2px 0 var(--cyan); }
+.ghost { background: transparent; color: var(--muted); }
+
+.card {
+  position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .02) inset, 0 10px 30px rgba(0, 0, 0, .35);
+}
+.card::before {
+  content: ""; position: absolute; left: 14px; right: 14px; top: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: .7;
+}
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.chart-head h2 { font: 600 12px var(--font-display); letter-spacing: .14em; text-transform: uppercase; margin: 0; color: var(--ink); }
+.chart-head small { color: var(--muted); font: 400 12px var(--font-data); }
+canvas { width: 100%; height: 290px; display: block; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
+canvas:active { cursor: grabbing; }
+.nav { display: flex; gap: 6px; }
+.nav button { min-height: 32px; padding: 4px 12px; font: 600 12px var(--font-data); letter-spacing: .04em; }
+
+.tbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.tbtns button {
+  min-height: 70px; border: 0; color: #02130d; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font: 800 19px var(--font-display); letter-spacing: .08em; text-transform: uppercase; touch-action: manipulation;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  border-radius: 0;
+}
+.tbtns button small { font: 600 11px var(--font-data); letter-spacing: .04em; opacity: .8; text-transform: none; }
+.tbtns .over { background: linear-gradient(135deg, #2dffb0, #19e3ff); box-shadow: 0 0 24px rgba(45, 255, 176, .45); }
+.tbtns .under { background: linear-gradient(135deg, #ff3d81, #8b5cff); color: #fff; box-shadow: 0 0 24px rgba(255, 61, 129, .45); }
+.tbtns button:active:not(:disabled) { filter: brightness(1.2); transform: translateY(1px); }
+.tbtns button:disabled { filter: grayscale(.7); box-shadow: none; }
+
+.tgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tgrid label, .form label, .limits label { display: flex; flex-direction: column; gap: 5px; font: 400 11px var(--font-data); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); min-width: 0; }
+.tgrid input { font-size: 16px; font-weight: 600; }
+.tgrid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.blabel { display: block; margin: 14px 0 6px; font: 400 11px var(--font-data); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.chips { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.chips button { padding: 0; min-height: 42px; font: 600 15px var(--font-data); color: var(--muted); }
+.chips button[aria-pressed="true"] { color: var(--ink); border-color: var(--cyan); background: linear-gradient(180deg, rgba(25, 227, 255, .25), rgba(139, 92, 255, .25)); box-shadow: 0 0 12px rgba(25, 227, 255, .25); }
+.tbtns.small { margin: 12px 0; }
+.tbtns.small button { min-height: 48px; font-size: 14px; }
+.pos-close { min-height: 30px; padding: 2px 12px; }
+#tmsg { font: 400 13px var(--font-data); margin-top: 10px; min-height: 18px; overflow-wrap: anywhere; color: var(--muted); }
+#tmsg.bad { color: var(--down); } #tmsg.ok { color: var(--up); }
+
+.now { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: stretch; }
+.digit-box { display: flex; flex-direction: column; justify-content: center; align-items: center; min-width: 124px; }
+.digit { font: 800 76px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.digit.up { color: var(--up); text-shadow: 0 0 22px rgba(45, 255, 176, .6); }
+.digit.down { color: var(--down); text-shadow: 0 0 22px rgba(255, 61, 129, .6); }
+.digit.flat { color: var(--flat); }
+.price { font: 400 13px var(--font-data); color: var(--muted); margin-top: 8px; font-variant-numeric: tabular-nums; text-align: center; }
+.verdict { font: 600 11px var(--font-data); letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); margin-top: 6px; text-align: center; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-content: center; }
+.stat { display: flex; flex-direction: column; gap: 4px; }
+.stat b { font: 600 22px/1 var(--font-data); font-variant-numeric: tabular-nums; }
+.stat span { font: 400 11px var(--font-data); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.stat.up b { color: var(--up); } .stat.down b { color: var(--down); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+#msg { font: 400 13px var(--font-data); color: var(--muted); }
+details { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--panel); }
+summary { cursor: pointer; font: 600 12px var(--font-display); letter-spacing: .14em; text-transform: uppercase; }
+.form { display: grid; gap: 10px; margin-top: 12px; }
+.limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.check { display: flex; flex-direction: row !important; align-items: center; gap: 10px !important; text-transform: none !important; letter-spacing: 0 !important; font: 400 13px var(--font-body) !important; color: var(--ink) !important; }
+.check input { width: 18px; min-height: 18px; accent-color: var(--cyan); }
+.rowbtns { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+.live-banner { padding: 10px 14px; border-radius: 10px; background: linear-gradient(90deg, #b3002d, #ff3d81); color: #fff; font: 800 13px var(--font-display); letter-spacing: .2em; text-align: center; box-shadow: 0 0 24px rgba(255, 61, 129, .5); }
+.pill.real { color: #fff; background: #b3002d; border-color: #ff3d81; } .pill.real i { background: #fff; }
+.danger { background: linear-gradient(135deg, #b3002d, #ff3d81); border: 0; color: #fff; font-weight: 700; }
+.livebox { border-color: rgba(255, 61, 129, .35); }
+.note.warn { color: var(--warn); }
+.confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--down); border-radius: 10px; background: rgba(255, 61, 129, .08); }
+.confirm p { margin: 0 0 10px; font: 400 13px/1.5 var(--font-data); }
+.go { background: linear-gradient(135deg, rgba(25, 227, 255, .3), rgba(139, 92, 255, .3)); border-color: var(--line-strong); font-weight: 600; }
+.note { font: 400 12px var(--font-body); color: var(--muted); margin: 8px 0 0; }
+
+.dist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; align-items: end; height: 130px; }
+.col { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 4px; }
+.bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; transition: height .25s ease; }
+.col.up .bar { background: linear-gradient(180deg, var(--up), rgba(45, 255, 176, .25)); box-shadow: 0 0 10px rgba(45, 255, 176, .25); }
+.col.down .bar { background: linear-gradient(180deg, var(--down), rgba(255, 61, 129, .25)); box-shadow: 0 0 10px rgba(255, 61, 129, .25); }
+.col.flat .bar { background: linear-gradient(180deg, var(--flat), rgba(107, 122, 150, .2)); }
+.col.last .bar { outline: 1px solid var(--cyan); outline-offset: 2px; }
+.col em { font: normal 600 13px var(--font-data); }
+.col small { font: 400 10px var(--font-data); color: var(--muted); font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font: 400 11px var(--font-data); color: var(--muted); margin-top: 10px; }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.legend .u::before { background: var(--up); } .legend .d::before { background: var(--down); } .legend .f::before { background: var(--flat); }
+
+.tablewrap { overflow-x: auto; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; font: 400 12px var(--font-data); font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 400; text-transform: uppercase; letter-spacing: .08em; font-size: 10px; }
+td.win { color: var(--up); } td.loss { color: var(--down); }
+.pat h3 { font: 600 11px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); margin: 14px 0 6px; }
+.pat .verdict-line { font: 400 13px/1.5 var(--font-body); padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(6, 10, 20, .6); }
+.pat td.hot { color: var(--warn); font-weight: 600; }
+.pat td.num { text-align: right; }
+.pat th.num { text-align: right; }
+@media (max-width: 460px) {
+  .now { grid-template-columns: 1fr; }
+  .digit-box { flex-direction: row; gap: 18px; justify-content: flex-start; }
+  .digit { font-size: 60px; }
+  canvas { height: 250px; }
+  h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="liveBanner" class="live-banner" hidden>LIVE ACCOUNT · REAL MONEY</div>
+  <header>
+    <h1>Njoro Pro<span class="tag">DIGIT TERMINAL</span></h1>
+    <div class="pills">
+      <span class="pill" id="status"><i></i><span id="statusText">Connecting</span></span>
+      <span class="pill" id="tStatus"><i></i><span id="tStatusText">Demo not connected</span></span>
+    </div>
+  </header>
+
+  <section class="card">
+    <div class="chart-head">
+      <h2 id="chartTitle">Walk: +1 over 5 / −1 under 5</h2>
+      <small id="chartSub"></small>
+      <div class="nav">
+        <button id="navBack" type="button" aria-label="Look further back">‹ Back</button>
+        <button id="navFwd" type="button" aria-label="Move forward">Fwd ›</button>
+        <button id="navLive" type="button" aria-label="Jump to live">Live</button>
+      </div>
+    </div>
+    <canvas id="chart" role="img" aria-label="Last digit chart"></canvas>
+    <div class="tbtns">
+      <button id="btnOver" class="over" type="button" disabled><span id="lblOver">Buy</span><small id="payOver">&nbsp;</small></button>
+      <button id="btnUnder" class="under" type="button" disabled><span id="lblUnder">Sell</span><small id="payUnder">&nbsp;</small></button>
+    </div>
+    <div id="liveConfirm" class="confirm" hidden>
+      <p id="lcText"></p>
+      <div class="rowbtns">
+        <button id="lcGo" class="danger" type="button">Confirm live trade</button>
+        <button id="lcNo" type="button">Cancel</button>
+      </div>
+    </div>
+    <div id="tmsg" role="status"></div>
+  </section>
+
+  <section class="card">
+    <span class="blabel" style="margin-top:0">Buy and Sell act as</span>
+    <div class="seg" id="tradeSeg" role="group" aria-label="Trade mode">
+      <button data-t="chart" aria-pressed="true">Chart position</button>
+      <button data-t="demo" aria-pressed="false">Live trade</button>
+    </div>
+    <div class="tgrid two" style="margin-top:12px">
+      <label>Stake (USD)<input id="stake" type="number" inputmode="decimal" min="0.35" step="0.01" value="1"></label>
+      <label>Ticks <input id="ticks" type="number" inputmode="numeric" min="1" max="10" step="1" value="1"></label>
+    </div>
+    <span class="blabel">Barrier digit · sets the chart and the trades</span>
+    <div class="chips" id="barrierChips" role="group" aria-label="Barrier digit"></div>
+    <input id="barrier" type="hidden" value="5">
+  </section>
+
+  <section class="card">
+    <div class="chart-head"><h2>Practice positions</h2><small>virtual · no money</small></div>
+    <div class="tgrid">
+      <label>Take profit (steps)<input id="pTP" type="number" inputmode="numeric" min="0" step="1" placeholder="none"></label>
+      <label>Stop loss (steps) <input id="pSL" type="number" inputmode="numeric" min="0" step="1" placeholder="none"></label>
+      <label>Value per step (USD) <input id="pVal" type="number" inputmode="decimal" min="0.01" step="0.01" value="0.10"></label>
+    </div>
+    <div class="tbtns small">
+      <button id="pBuy" class="over" type="button"><span>Practice Buy</span></button>
+      <button id="pSell" class="under" type="button"><span>Practice Sell</span></button>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Side</th><th>Ticks</th><th>Profit</th><th></th></tr></thead><tbody id="pRows"></tbody></table></div>
+    <p class="note" id="pSum">1 step = one Over tick (+1) or one Under tick (−1) on the chart. A Buy gains when the line rises, a Sell gains when it falls.</p>
+  </section>
+
+  <div class="now">
+    <div class="card digit-box">
+      <div class="digit flat" id="lastDigit">–</div>
+      <div>
+        <div class="price" id="lastPrice">waiting for tick</div>
+        <div class="verdict" id="verdict">&nbsp;</div>
+      </div>
+    </div>
+    <div class="card stats">
+      <div class="stat up"><b id="sOver">–</b><span id="lOver">Over 5 (6–9)</span></div>
+      <div class="stat down"><b id="sUnder">–</b><span id="lUnder">Under 5 (0–4)</span></div>
+      <div class="stat"><b id="sFive">–</b><span id="lEq">Exactly 5</span></div>
+      <div class="stat"><b id="sStreak">–</b><span>Streak</span></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <select id="market" aria-label="Market"></select>
+    <div class="seg" id="winSeg" role="group" aria-label="Ticks shown">
+      <button data-n="50" aria-pressed="false">50</button>
+      <button data-n="100" aria-pressed="true">100</button>
+      <button data-n="200" aria-pressed="false">200</button>
+      <button data-n="500" aria-pressed="false">500</button>
+    </div>
+    <div class="seg" id="modeSeg" role="group" aria-label="Chart type">
+      <button data-m="walk" aria-pressed="true">Walk</button>
+      <button data-m="digit" aria-pressed="false">Digits</button>
+    </div>
+  </div>
+  <div id="msg" hidden></div>
+
+  <details id="connect" hidden style="display:none">
+    <summary>Demo account</summary>
+    <div class="form">
+      <label>App ID <input id="appId" value="" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="paste your App ID"></label>
+      <label>Demo account ID <input id="acctId" value="DOT93002528" autocomplete="off" autocapitalize="characters"></label>
+      <label>Personal access token (Trade scope) <input id="pat" type="password" autocomplete="off" placeholder="paste token here"></label>
+      <label class="check"><input id="remember" type="checkbox"> Remember this token on this device and connect automatically</label>
+      <button id="btnConnect" class="go" type="button">Connect</button>
+      <div class="rowbtns">
+        <input id="otpUrl" autocomplete="off" placeholder="paste a one-time link, demo or live (wss://…)">
+        <button id="btnConnectUrl" type="button">Use link</button>
+      </div>
+      <button id="btnForget" class="ghost" type="button">Forget saved token and settings</button>
+    </div>
+    <div class="limits">
+      <label>Max stake per trade <input id="maxStake" type="number" inputmode="decimal" min="0.35" step="0.01" value="5"></label>
+      <label>Stop after losing (session) <input id="lossLimit" type="number" inputmode="decimal" min="1" step="1" value="10"></label>
+    </div>
+    <p class="note">This section is for your demo account only. A remembered token is stored in this browser on this device, so use it only for a demo token. In Demo contract mode each tap places a trade with no confirm step. Settings are saved automatically.</p>
+  </details>
+
+  <details id="liveBox" class="livebox" open>
+    <summary>Connect · real money</summary>
+    <p class="note warn">This uses real money. You can lose your whole stake on every trade, and Over/Under always pays slightly less than fair odds. Use a token with the Trade scope only, and start with the smallest stake. The live token is never saved.</p>
+    <div class="form">
+      <div id="liveFields">
+        <div class="form">
+          <div class="rowbtns">
+            <input id="liveUrl" autocomplete="off" placeholder="paste a one-time live link (wss://…/ws/real…)">
+            <button id="btnLiveUrl" type="button">Use link</button>
+          </div>
+          <label>Live account ID <input id="acctLive" autocomplete="off" autocapitalize="characters" placeholder="for example CR1234567"></label>
+          <label>Live token (Trade scope only) <input id="patLive" type="password" autocomplete="off" placeholder="paste live token here"></label>
+          <div class="limits">
+            <label>Max stake per trade <input id="liveMax" type="number" inputmode="decimal" min="0.35" step="0.01" value="1"></label>
+            <label>Stop after losing (session) <input id="liveLoss" type="number" inputmode="decimal" min="0.35" step="0.01" value="3"></label>
+          </div>
+          <button id="btnConnectLive" class="danger" type="button">Connect live</button>
+        </div>
+      </div>
+      <button id="btnDisc" class="ghost" type="button">Disconnect</button>
+      <div id="liveMsg" class="note" role="status"></div>
+    </div>
+  </details>
+
+  <section class="card">
+    <div class="chart-head"><h2>This session</h2><small id="pnl">no trades yet</small></div>
+    <div class="tablewrap"><table><thead><tr><th>Time</th><th>Trade</th><th>Stake</th><th>Result</th></tr></thead><tbody id="rows"></tbody></table></div>
+  </section>
+
+  <section class="card pat">
+    <div class="chart-head"><h2>Pattern scan</h2><small id="patSub"></small></div>
+    <div id="patBody">Collecting ticks…</div>
+  </section>
+
+  <div class="card">
+    <div class="chart-head"><h2>Digit frequency</h2><small id="distSub"></small></div>
+    <div class="dist" id="dist"></div>
+    <div class="legend"><span class="u" id="lgU">Over 5</span><span class="d" id="lgD">Under 5</span><span class="f" id="lgF">Equal</span></div>
+  </div>
+
+  <p class="note">Every digit is independent of the ones before it, so patterns on the chart do not make the next digit more or less likely. The payout always prices in a margin for Deriv.</p>
+</div>
+
+<script>
+(function () {
+  var MARKETS = [
+    ["R_10", "Volatility 10 Index"], ["R_25", "Volatility 25 Index"], ["R_50", "Volatility 50 Index"],
+    ["R_75", "Volatility 75 Index"], ["R_100", "Volatility 100 Index"],
+    ["1HZ10V", "Volatility 10 (1s) Index"], ["1HZ25V", "Volatility 25 (1s) Index"], ["1HZ50V", "Volatility 50 (1s) Index"],
+    ["1HZ75V", "Volatility 75 (1s) Index"], ["1HZ100V", "Volatility 100 (1s) Index"]
+  ];
+  var BUFFER = 3000;
+  var FEEDS = [
+    "wss://api.derivws.com/trading/v1/options/ws/public",
+    "wss://ws.derivws.com/websockets/v3?app_id=1089"
+  ];
+  var API = "https://api.derivws.com";
+  var KEY = "njoro-pro-v1";
+
+  var state = { symbol: "R_100", win: 100, mode: "walk", digits: [], price: null, ws: null, sim: null, retry: null,
+                failures: 0, everOpened: false, gen: 0, feedIdx: 0, ping: null, offset: 0, cursorAgo: null, total: 0, barrier: 5, tmode: "chart" };
+  var $ = function (id) { return document.getElementById(id); };
+  var canvas = $("chart"), ctx = canvas.getContext("2d");
+
+  /* ---------- saved settings ---------- */
+  function loadSaved() { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } }
+  function saveNow() {
+    try {
+      var s = { stake: $("stake").value, barrier: $("barrier").value, ticks: $("ticks").value, pTP: $("pTP").value, pSL: $("pSL").value, pVal: $("pVal").value, tmode: state.tmode,
+                maxStake: $("maxStake").value, lossLimit: $("lossLimit").value, symbol: state.symbol,
+                win: state.win, mode: state.mode, appId: $("appId").value, acctId: $("acctId").value,
+                remember: $("remember").checked };
+      if (s.remember) s.pat = $("pat").value;
+      localStorage.setItem(KEY, JSON.stringify(s));
+    } catch (e) {}
+  }
+  function pressSeg(id, attr, val) {
+    Array.prototype.forEach.call($(id).children, function (b) { b.setAttribute("aria-pressed", b.getAttribute(attr) === String(val) ? "true" : "false"); });
+  }
+  var saved = loadSaved();
+  ["stake", "barrier", "ticks", "maxStake", "lossLimit", "appId", "acctId"].forEach(function (id) { if (saved[id] != null && saved[id] !== "") $(id).value = saved[id]; });
+  if (saved.symbol) state.symbol = saved.symbol;
+  if (saved.win) { state.win = Number(saved.win); pressSeg("winSeg", "data-n", state.win); }
+  if (saved.mode) { state.mode = saved.mode; pressSeg("modeSeg", "data-m", state.mode); $("chartTitle").textContent = state.mode === "walk" ? "Walk: +1 over 5 / −1 under 5" : "Last digit, 0 to 9"; }
+  if (saved.remember) { $("remember").checked = true; if (saved.pat) $("pat").value = saved.pat; }
+  ["pTP", "pSL", "pVal"].forEach(function (id) { if (saved[id] != null && saved[id] !== "") $(id).value = saved[id]; });
+  if (saved.tmode === "demo") { state.tmode = "demo"; pressSeg("tradeSeg", "data-t", "demo"); }
+  var bv0 = Math.round(Number($("barrier").value));
+  state.barrier = (bv0 >= 0 && bv0 <= 9) ? bv0 : 5; $("barrier").value = state.barrier;
+
+  function cls(d) { var b = state.barrier; return d > b ? "up" : d < b ? "down" : "flat"; }
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function setStatus(kind, text) { $("status").className = "pill " + kind; $("statusText").textContent = text; }
+  function note(text) { var m = $("msg"); if (text) { m.textContent = text; m.hidden = false; } else { m.hidden = true; } }
+  function lastDigitOf(quote, pip) {
+    var s = Number(quote).toFixed(pip == null ? 2 : pip);
+    return Number(s.charAt(s.length - 1));
+  }
+  function push(d, price) {
+    state.digits.push(d); state.price = price; state.total++; practiceTick(d);
+    if (state.offset > 0) state.offset++;
+    if (state.cursorAgo != null) state.cursorAgo++;
+    if (state.digits.length > BUFFER) state.digits.shift();
+  }
+
+  /* ---------- live tick feed ---------- */
+  function stopSim() { if (state.sim) { clearInterval(state.sim); state.sim = null; } }
+  function stopPing() { if (state.ping) { clearInterval(state.ping); state.ping = null; } }
+  function closeWs() {
+    stopPing();
+    var ws = state.ws; state.ws = null;
+    if (ws) { ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null; try { ws.close(); } catch (e) {} }
+  }
+  function startSim() {
+    stopSim();
+    setStatus("sim", "Simulated");
+    note("Cannot reach Deriv's tick feed from here, so these digits are simulated. Open this file directly in your browser for live ticks.");
+    var base = 1000 + Math.random() * 500;
+    if (!state.digits.length) for (var i = 0; i < 200; i++) push(Math.floor(Math.random() * 10), (base + Math.random()).toFixed(2));
+    state.sim = setInterval(function () { push(Math.floor(Math.random() * 10), (base + Math.random() * 3).toFixed(2)); render(); }, 1000);
+    render();
+  }
+  function connect() {
+    var gen = ++state.gen;
+    clearTimeout(state.retry); stopSim(); closeWs();
+    setStatus("", "Connecting");
+    var opened = false, ws, url = FEEDS[state.feedIdx % FEEDS.length];
+    try { ws = new WebSocket(url); } catch (e) { fail(); return; }
+    state.ws = ws;
+    var guard = setTimeout(function () { if (!opened && gen === state.gen) fail(); }, 7000);
+
+    function fail() {
+      if (gen !== state.gen) return;
+      clearTimeout(guard); closeWs();
+      state.failures++; state.feedIdx++;
+      if (state.failures >= FEEDS.length * 2 && !state.everOpened) { startSim(); state.retry = setTimeout(connect, 30000); }
+      else { setStatus("err", "Reconnecting"); state.retry = setTimeout(connect, 1500); }
+    }
+    ws.onopen = function () {
+      if (gen !== state.gen) return;
+      opened = true; state.everOpened = true; state.failures = 0; clearTimeout(guard);
+      state.digits = []; state.price = null;
+      state.offset = 0; state.cursorAgo = null;
+      ws.send(JSON.stringify({ ticks_history: state.symbol, adjust_start_time: 1, count: 1000, end: "latest", style: "ticks", subscribe: 1 }));
+      state.ping = setInterval(function () { try { ws.send(JSON.stringify({ ping: 1 })); } catch (e) {} }, 30000);
+    };
+    ws.onmessage = function (ev) {
+      if (gen !== state.gen) return;
+      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.error) {
+        if (m.echo_req && m.echo_req.ticks_history) {
+          ws.send(JSON.stringify({ ticks: state.symbol, subscribe: 1 }));
+          note("Tick history was not available, so the chart will fill as new ticks arrive.");
+          return;
+        }
+        setStatus("err", "Error"); note(m.error.message || "Deriv returned an error."); return;
+      }
+      if (m.msg_type === "history" && m.history) {
+        var pip = m.pip_size, prices = m.history.prices || [];
+        state.digits = prices.map(function (p) { return lastDigitOf(p, pip); });
+        state.offset = 0; state.cursorAgo = null;
+        state.price = prices.length ? Number(prices[prices.length - 1]).toFixed(pip == null ? 2 : pip) : null;
+        setStatus("live", "Live"); note(""); render();
+      } else if (m.msg_type === "tick" && m.tick) {
+        var t = m.tick, p = t.pip_size;
+        push(lastDigitOf(t.quote, p), Number(t.quote).toFixed(p == null ? 2 : p));
+        setStatus("live", "Live"); render();
+      }
+    };
+    ws.onerror = function () { if (!opened) fail(); };
+    ws.onclose = function () { if (gen === state.gen && opened) { setStatus("err", "Reconnecting"); state.retry = setTimeout(connect, 2000); } };
+  }
+
+  /* ---------- stats and distribution ---------- */
+  function clampOffset(o) { return Math.max(0, Math.min(Math.max(0, state.digits.length - state.win), o)); }
+  function viewRange() {
+    var len = state.digits.length;
+    state.offset = clampOffset(state.offset);
+    var end = len - state.offset, start = Math.max(0, end - state.win);
+    return { start: start, end: end };
+  }
+  function windowDigits() { var vr = viewRange(); return state.digits.slice(vr.start, vr.end); }
+  function updateNav() {
+    var max = Math.max(0, state.digits.length - state.win);
+    $("navBack").disabled = state.offset >= max;
+    $("navFwd").disabled = state.offset <= 0;
+    $("navLive").disabled = state.offset <= 0;
+  }
+  function renderStats() {
+    var w = windowDigits(), n = w.length;
+    if (!n) return;
+    var over = 0, under = 0, five = 0;
+    w.forEach(function (d) { if (d > state.barrier) over++; else if (d < state.barrier) under++; else five++; });
+    var pct = function (x) { return (100 * x / n).toFixed(1) + "%"; };
+    $("sOver").textContent = pct(over); $("sUnder").textContent = pct(under); $("sFive").textContent = pct(five);
+    var all = state.digits, last = all[all.length - 1], c = cls(last), k = 0;
+    for (var i = all.length - 1; i >= 0 && cls(all[i]) === c; i--) k++;
+    $("sStreak").textContent = k + " " + (c === "up" ? "over" : c === "down" ? "under" : "equal");
+    var ld = $("lastDigit"); ld.textContent = last; ld.className = "digit " + c;
+    $("lastPrice").textContent = state.price != null ? state.price : "";
+    $("verdict").textContent = c === "up" ? "Over " + state.barrier : c === "down" ? "Under " + state.barrier : "Exactly " + state.barrier;
+    var counts = new Array(10).fill(0); w.forEach(function (d) { counts[d]++; });
+    var max = Math.max.apply(null, counts) || 1, html = "";
+    for (var d = 0; d < 10; d++) {
+      html += '<div class="col ' + cls(d) + (d === last ? " last" : "") + '"><small>' + (100 * counts[d] / n).toFixed(0) + '%</small>' +
+        '<div class="bar" style="height:' + Math.max(2, 90 * counts[d] / max) + 'px"></div><em>' + d + '</em></div>';
+    }
+    $("dist").innerHTML = html;
+    $("distSub").textContent = state.offset > 0 ? "ticks " + state.offset + "–" + (state.offset + n) + " ago" : "last " + n + " ticks";
+  }
+
+  /* ---------- chart ---------- */
+  function fit() {
+    var r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: r.width, h: r.height };
+  }
+  function drawChart() {
+    var s = fit(), W = s.w, H = s.h, w = windowDigits(), n = w.length, vw = viewRange();
+    var C = { ink: css("--ink"), muted: css("--muted"), line: css("--line"), up: css("--up"), down: css("--down"), flat: css("--flat"), cyan: css("--cyan"), surface: css("--surface") };
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = "11px " + css("--font-data");
+    if (n < 2) { ctx.fillStyle = C.muted; ctx.fillText("Waiting for ticks…", 16, 24); return; }
+    var L = 34, R = 16, T0 = 14, B = 22, pw = W - L - R, ph = H - T0 - B;
+    var X = function (i) { return L + (i / (n - 1)) * pw; };
+    var yMin, yMax, Y, ticks = [], series;
+    if (state.mode === "walk") {
+      series = [0];
+      for (var i = 0; i < n; i++) series.push(series[i] + (w[i] > state.barrier ? 1 : w[i] < state.barrier ? -1 : 0));
+      series = series.slice(1);
+      var lo = Math.min(0, Math.min.apply(null, series)), hi = Math.max(0, Math.max.apply(null, series));
+      yMin = lo - 1; yMax = hi + 1;
+      var step = Math.max(1, Math.ceil((yMax - yMin) / 6));
+      for (var v = Math.ceil(yMin / step) * step; v <= yMax; v += step) ticks.push(v);
+    } else {
+      series = w.slice(); yMin = -0.5; yMax = 9.5; ticks = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    }
+    Y = function (v) { return T0 + (1 - (v - yMin) / (yMax - yMin)) * ph; };
+    if (state.mode === "digit") {
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = C.up; ctx.fillRect(L, Y(9.5), pw, Y(state.barrier + 0.5) - Y(9.5));
+      ctx.fillStyle = C.down; ctx.fillRect(L, Y(state.barrier - 0.5), pw, Y(-0.5) - Y(state.barrier - 0.5));
+      ctx.globalAlpha = 1;
+    }
+    ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.lineWidth = 1;
+    ticks.forEach(function (v) {
+      var y = Math.round(Y(v)) + 0.5, zero = (state.mode === "walk" && v === 0) || (state.mode === "digit" && v === state.barrier);
+      ctx.strokeStyle = zero ? C.muted : C.line; ctx.setLineDash(zero ? [4, 4] : []);
+      ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - R, y); ctx.stroke();
+      ctx.fillStyle = C.muted; ctx.fillText(String(v), L - 6, y);
+    });
+    ctx.setLineDash([]);
+    ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillStyle = C.muted;
+    ctx.fillText("−" + (state.offset + n - 1), L, H - B + 6); ctx.fillText(state.offset > 0 ? "−" + state.offset : "now", W - R - 8, H - B + 6);
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    if (state.mode === "walk") {
+      var base = Y(0), grad = ctx.createLinearGradient(0, T0, 0, T0 + ph);
+      grad.addColorStop(0, "rgba(25,227,255,0.16)"); grad.addColorStop(1, "rgba(25,227,255,0)");
+      ctx.fillStyle = grad; ctx.beginPath(); ctx.moveTo(X(0), base);
+      series.forEach(function (v, k) { ctx.lineTo(X(k), Y(v)); });
+      ctx.lineTo(X(n - 1), base); ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 2.2;
+      for (var j = 1; j < n; j++) {
+        ctx.strokeStyle = C[cls(w[j])]; ctx.shadowColor = C[cls(w[j])]; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.moveTo(X(j - 1), Y(series[j - 1])); ctx.lineTo(X(j), Y(series[j])); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.strokeStyle = "rgba(129,147,178,.55)"; ctx.lineWidth = 1.3; ctx.beginPath();
+      series.forEach(function (v, k) { k ? ctx.lineTo(X(k), Y(v)) : ctx.moveTo(X(k), Y(v)); });
+      ctx.stroke();
+      series.forEach(function (v, k) {
+        ctx.fillStyle = C[cls(v)]; ctx.shadowColor = C[cls(v)]; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.arc(X(k), Y(v), n > 120 ? 2 : 3.2, 0, 6.283); ctx.fill();
+      });
+      ctx.shadowBlur = 0;
+    }
+    var lx = X(n - 1), ly = Y(series[n - 1]), lc = C[cls(w[n - 1])];
+    ctx.shadowColor = lc; ctx.shadowBlur = 16; ctx.fillStyle = lc;
+    ctx.beginPath(); ctx.arc(lx, ly, 5.5, 0, 6.283); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.strokeStyle = C.surface; ctx.lineWidth = 2; ctx.stroke();
+    var lblN = 0;
+    V.open.forEach(function (pos) {
+      if (state.mode !== "walk") return;
+      var ix = (state.digits.length - 1 - (state.total - pos.openTotal)) - vw.start;
+      if (ix < 0 || ix >= n) return;
+      var px = X(ix), py = Y(series[ix]), pc = pos.side > 0 ? C.up : C.down, dy = pos.side > 0 ? -1 : 1;
+      var zone = function (y0, h, color) {
+        ctx.save(); ctx.beginPath(); ctx.rect(px, y0, W - R - px, h); ctx.clip();
+        ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(px, py);
+        for (var k = ix; k < n; k++) ctx.lineTo(X(k), Y(series[k]));
+        ctx.lineTo(X(n - 1), py); ctx.closePath(); ctx.fill(); ctx.restore();
+      };
+      var upper = [T0, py - T0], lower = [py, T0 + ph - py];
+      zone(pos.side > 0 ? upper[0] : lower[0], pos.side > 0 ? upper[1] : lower[1], "rgba(45,255,176,0.2)");
+      zone(pos.side > 0 ? lower[0] : upper[0], pos.side > 0 ? lower[1] : upper[1], "rgba(255,61,129,0.2)");
+      ctx.fillStyle = pos.pl >= 0 ? C.up : C.down; ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+      ctx.fillText((pos.side > 0 ? "BUY " : "SELL ") + fmtSteps(pos.pl) + " · " + money(pos.pl * pos.vps), W - R - 4, Math.min(T0 + ph - 2, Math.max(T0 + 12, py - 4) + lblN++ * 12));
+      ctx.strokeStyle = pc; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(W - R, py); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = pc; ctx.beginPath();
+      ctx.moveTo(px, py + dy * 11); ctx.lineTo(px - 6, py + dy * 1); ctx.lineTo(px + 6, py + dy * 1); ctx.closePath(); ctx.fill();
+    });
+    var sub = state.offset > 0 ? state.offset + "–" + (state.offset + n) + " ticks ago" : "live · drag to look back";
+    if (state.cursorAgo != null) {
+      var abs = state.digits.length - 1 - state.cursorAgo, ci = abs - vw.start;
+      if (ci >= 0 && ci < n) {
+        var cx = X(ci), cy = Y(series[ci]), cc = C[cls(w[ci])];
+        ctx.strokeStyle = C.cyan; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(cx, T0); ctx.lineTo(cx, T0 + ph); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = cc; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, 6.283); ctx.fill();
+        ctx.strokeStyle = C.surface; ctx.lineWidth = 2; ctx.stroke();
+        sub = "digit " + w[ci] + " (" + (w[ci] > state.barrier ? "Over" : w[ci] < state.barrier ? "Under" : "Equal") + ") · " + state.cursorAgo + " ticks ago";
+      }
+    }
+    $("chartSub").textContent = sub;
+    updateNav();
+  }
+  /*PAT-START*/
+  function analyzePatterns(digits, bb) {
+    var b = bb == null ? 5 : bb, n = digits.length, s = digits.map(function (d) { return d > b ? "O" : d < b ? "U" : "F"; });
+    var cnt = { O: 0, U: 0, F: 0 }; s.forEach(function (c) { cnt[c]++; });
+    var p = { O: cnt.O / n, U: cnt.U / n, F: cnt.F / n };
+    var cont = [];
+    ["O", "U"].forEach(function (c) {
+      for (var k = 1; k <= 5; k++) {
+        var tot = 0, hit = 0;
+        for (var i = k; i < n; i++) {
+          var all = true;
+          for (var j = i - k; j < i; j++) if (s[j] !== c) { all = false; break; }
+          if (!all) continue;
+          tot++; if (s[i] === c) hit++;
+        }
+        var rate = tot ? hit / tot : 0, sd = Math.sqrt(p[c] * (1 - p[c]) / (tot || 1));
+        cont.push({ side: c, k: k, n: tot, rate: rate, base: p[c], z: tot >= 30 && sd > 0 ? (rate - p[c]) / sd : 0 });
+      }
+    });
+    var tri = {}, n3 = n - 2;
+    for (var i2 = 0; i2 < n3; i2++) { var key = s[i2] + s[i2 + 1] + s[i2 + 2]; tri[key] = (tri[key] || 0) + 1; }
+    var tl = Object.keys(tri).map(function (key) {
+      var exp = n3 * p[key[0]] * p[key[1]] * p[key[2]];
+      return { key: key, obs: tri[key], exp: exp, z: exp > 0 ? (tri[key] - exp) / Math.sqrt(exp * (1 - exp / n3)) : 0 };
+    }).sort(function (a, b) { return b.obs - a.obs; });
+    var dc = new Array(10).fill(0); digits.forEach(function (d) { dc[d]++; });
+    var chi = 0, e = n / 10; dc.forEach(function (o) { chi += (o - e) * (o - e) / e; });
+    var flags = cont.filter(function (r) { return Math.abs(r.z) >= 3; }).length +
+                tl.filter(function (r) { return r.exp >= 5 && Math.abs(r.z) >= 3; }).length;
+    return { n: n, p: p, cont: cont, tri: tl, chi: chi, flags: flags };
+  }
+  /*PAT-END*/
+
+  var patLast = 0;
+  function renderPatterns() {
+    var body = $("patBody"); if (!body) return;
+    var d = state.digits;
+    if (d.length < 200) { body.textContent = "Collecting ticks… " + d.length + " of 200 needed."; $("patSub").textContent = ""; return; }
+    if (Date.now() - patLast < 2000) return;
+    patLast = Date.now();
+    var r = analyzePatterns(d, state.barrier), nm = { O: "Over", U: "Under", F: "Equal" };
+    var pc = function (x) { return (100 * x).toFixed(1) + "%"; };
+    $("patSub").textContent = "last " + r.n + " ticks · " + state.symbol + " · barrier " + state.barrier;
+    var verdict;
+    if (r.flags === 0 && r.chi < 21.7) verdict = "Nothing here beats chance. Streaks do not keep going or reverse any more than a coin flip would, and no digit sequence shows up more than its odds say it should.";
+    else verdict = r.flags + " result" + (r.flags === 1 ? "" : "s") + " stand" + (r.flags === 1 ? "s" : "") + " out below" + (r.chi >= 21.7 ? ", and the digit counts look uneven" : "") +
+                   ". With this many comparisons a couple of false alarms are normal, so check whether the same result shows up again on the next 1000 ticks before trusting it.";
+    var h = '<p class="verdict-line">' + verdict + '</p>';
+    h += '<h3>After a streak, does it continue?</h3><div class="tablewrap"><table><thead><tr><th>Streak</th><th class="num">Times</th><th class="num">Continued</th><th class="num">Chance</th><th>Read</th></tr></thead><tbody>';
+    r.cont.forEach(function (c) {
+      var hot = Math.abs(c.z) >= 3;
+      h += '<tr><td>' + nm[c.side] + ' × ' + c.k + '</td><td class="num">' + c.n + '</td><td class="num">' + pc(c.rate) + '</td><td class="num">' + pc(c.base) +
+           '</td><td class="' + (hot ? "hot" : "") + '">' + (c.n < 30 ? "too few" : hot ? "unusual" : "normal") + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<h3>Most common 3-tick sequences</h3><div class="tablewrap"><table><thead><tr><th>Sequence</th><th class="num">Seen</th><th class="num">By chance</th><th class="num">Ratio</th></tr></thead><tbody>';
+    r.tri.slice(0, 6).forEach(function (t) {
+      h += '<tr><td>' + t.key.split("").map(function (x) { return nm[x]; }).join(" → ") + '</td><td class="num">' + t.obs + '</td><td class="num">' + t.exp.toFixed(1) +
+           '</td><td class="num ' + (Math.abs(t.z) >= 3 && t.exp >= 5 ? "hot" : "") + '">' + (t.exp ? (t.obs / t.exp).toFixed(2) : "–") + '×</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<p class="note">Digit evenness check: ' + r.chi.toFixed(1) + ' (above about 21.7 would be unusual). A ratio near 1.00× means the sequence appears about as often as chance predicts.</p>';
+    body.innerHTML = h;
+  }
+
+  function render() { renderStats(); drawChart(); renderPatterns(); renderPractice(); refreshButtons(); }
+
+  /* ---------- demo trading (instant buy from pre-fetched prices) ---------- */
+  var T = { ws: null, ok: false, cur: "USD", balance: null, busy: false, side: null,
+            rows: [], pnl: 0, locked: false, ping: null, creds: null, rcN: 0, rcTimer: null, connecting: false, live: false, modeLive: null, propsStarted: false };
+  var P = { gen: 0, timer: null, over: null, under: null, subs: {}, cfg: null };
+
+  function tmsg(text, kind) { var e = $("tmsg"); e.textContent = text || ""; e.className = kind || ""; }
+  function setT(kind, text) { $("tStatus").className = "pill " + kind; $("tStatusText").textContent = text; }
+  function num(id) { return Number($(id).value); }
+  function refreshButtons() {
+    var off = !T.ok || T.locked;
+    if (state.tmode === "chart") { var none = !state.digits.length; $("btnOver").disabled = none; $("btnUnder").disabled = none; return; }
+    $("btnOver").disabled = off || state.barrier > 8; $("btnUnder").disabled = off || state.barrier < 1;
+  }
+  function labelButtons() {
+    showPay(); refreshButtons();
+  }
+  function showPay() {
+    var b = state.barrier;
+    if (state.tmode === "chart") { $("payOver").textContent = "chart position · virtual"; $("payUnder").textContent = "chart position · virtual"; return; }
+    $("payOver").textContent = b > 8 ? "Over 9 cannot win" : "Over " + b + (P.over ? " · pays " + (P.over.payout / P.over.stake).toFixed(2) + "×" : (T.ok ? " · pricing…" : ""));
+    $("payUnder").textContent = b < 1 ? "Under 0 cannot win" : "Under " + b + (P.under ? " · pays " + (P.under.payout / P.under.stake).toFixed(2) + "×" : (T.ok ? " · pricing…" : ""));
+  }
+  function tsend(obj) { if (T.ws && T.ws.readyState === 1) { T.ws.send(JSON.stringify(obj)); return true; } return false; }
+
+  function inputs() {
+    var stake = num("stake"), bar = Math.round(num("barrier")), ticks = Math.round(num("ticks")), maxS = num(T.live ? "liveMax" : "maxStake");
+    if (!(stake >= 0.35)) return { err: "The minimum stake is 0.35." };
+    if (stake > maxS) return { err: "Stake is above your max stake of " + maxS + "." };
+    if (!(bar >= 0 && bar <= 9)) return { err: "Barrier must be a digit from 0 to 9." };
+    if (!(ticks >= 1 && ticks <= 10)) return { err: "Ticks must be from 1 to 10." };
+    return { stake: stake, bar: bar, ticks: ticks };
+  }
+
+  function dropProps() {
+    Object.keys(P.subs).forEach(function (side) { if (P.subs[side]) tsend({ forget: P.subs[side] }); });
+    P.subs = {}; P.over = null; P.under = null;
+  }
+  function subscribeProps(immediate) {
+    clearTimeout(P.timer);
+    if (!T.ok) return;
+    P.over = null; P.under = null; showPay();
+    P.timer = setTimeout(doSub, immediate ? 0 : 350);
+  }
+  function doSub() {
+    if (!T.ok) return;
+    var i = inputs();
+    if (i.err) { tmsg(i.err, "bad"); return; }
+    dropProps();
+    P.gen++;
+    var g = P.gen;
+    P.cfg = { stake: i.stake, bar: i.bar, ticks: i.ticks, symbol: state.symbol };
+    [["over", "DIGITOVER", 1], ["under", "DIGITUNDER", 2]].forEach(function (s) {
+      if ((s[0] === "over" && i.bar > 8) || (s[0] === "under" && i.bar < 1)) return;
+      tsend({ proposal: 1, subscribe: 1, amount: i.stake, basis: "stake", contract_type: s[1], currency: T.cur,
+              duration: i.ticks, duration_unit: "t", underlying_symbol: state.symbol, barrier: String(i.bar), req_id: g * 10 + s[2] });
+    });
+    tmsg("");
+  }
+
+  function openTrade(url) {
+    var mm = String(url || "").replace(/\\u0026/g, "&").replace(/&amp;/g, "&").match(/wss:\/\/[^\s"'<>\\]+/);
+    if (mm) url = mm[0];
+    if (!/^wss:\/\/api\.derivws\.com\//.test(url)) { tmsg("That is not a Deriv WebSocket link.", "bad"); return false; }
+    var wantLive = !!(T.creds && T.creds.live);
+    if (wantLive ? !/\/ws\/real/.test(url) : (/\/ws\/real/.test(url) || !/\/ws\/demo/.test(url))) {
+      tmsg(wantLive ? "Deriv did not return a real-money link for that account ID." : "That link is not for a demo account. Use the Live section for real money.", "bad");
+      setT("err", "Refused"); return false;
+    }
+    if (T.ws) { var old = T.ws; T.ws = null; old.onopen = old.onmessage = old.onerror = old.onclose = null; try { old.close(); } catch (e) {} }
+    clearInterval(T.ping);
+    var ws;
+    try { ws = new WebSocket(url); } catch (e) { tmsg("Could not open the connection.", "bad"); return false; }
+    T.ws = ws; setT("", "Connecting");
+    ws.onopen = function () {
+      if (T.ws !== ws) return;
+      if (T.modeLive !== wantLive) { T.pnl = 0; T.locked = false; T.rows = []; renderRows(); T.modeLive = wantLive; }
+      T.ok = true; T.live = wantLive; T.rcN = 0; T.propsStarted = false;
+      $("liveBanner").hidden = !wantLive;
+      if (wantLive) {
+        state.tmode = "demo"; pressSeg("tradeSeg", "data-t", "demo");
+        setT("real", "LIVE connected"); tmsg("LIVE account connected. Buy and Sell now place real trades, with a confirm step.", "ok");
+      } else { setT("live", "Demo connected"); tmsg("Connected to your demo account.", "ok"); }
+      $("connect").open = false;
+      tsend({ balance: 1, subscribe: 1 });
+      T.ping = setInterval(function () { tsend({ ping: 1 }); }, 30000);
+      refreshButtons();
+      setTimeout(function () { if (T.ws === ws && T.ok && !T.propsStarted) { T.propsStarted = true; subscribeProps(true); } }, 1500);
+    };
+    ws.onmessage = function (ev) { if (T.ws !== ws) return; var m; try { m = JSON.parse(ev.data); } catch (e) { return; } onTradeMsg(m); };
+    ws.onerror = function () { if (T.ws === ws && !T.ok) tmsg("Deriv refused the connection. A one-time link works once and expires after about 2 minutes. Get a fresh link and paste it straight away, or use your token and tap Connect.", "bad"); };
+    ws.onclose = function () {
+      if (T.ws !== ws) return;
+      T.ok = false; T.live = false; T.propsStarted = false; T.busy = false; clearInterval(T.ping); clearTimeout(P.timer);
+      $("liveBanner").hidden = true; hideConfirm();
+      P.over = null; P.under = null; P.subs = {};
+      refreshButtons(); showPay();
+      if (T.creds && !T.creds.noRefresh) { setT("err", "Reconnecting"); scheduleReconnect(); }
+      else { setT("err", "Disconnected"); $("connect").open = true; }
+    };
+    return true;
+  }
+
+  function scheduleReconnect() {
+    clearTimeout(T.rcTimer);
+    var delay = Math.min(30000, 1500 * Math.pow(2, T.rcN)); T.rcN++;
+    T.rcTimer = setTimeout(function () { tokenConnect(true); }, delay);
+  }
+
+  /* Gets a fresh one-time link from the saved or typed token, then connects. */
+  async function tokenConnect(auto, live) {
+    if (T.connecting) return;
+    if (!auto) {
+      var pat0 = $(live ? "patLive" : "pat").value.trim(), app0 = $("appId").value.trim(), acct0 = $(live ? "acctLive" : "acctId").value.trim();
+      if (!pat0 || !app0 || !acct0) { tmsg("Enter the app ID, " + (live ? "live" : "demo") + " account ID and token.", "bad"); return; }
+      T.creds = { pat: pat0, app: app0, acct: acct0, live: !!live }; T.rcN = 0;
+    }
+    var c = T.creds; if (!c) return;
+    T.connecting = true;
+    setT("", auto ? "Reconnecting" : "Connecting");
+    if (!auto) tmsg("");
+    var res;
+    try {
+      res = await fetch(API + "/trading/v1/options/accounts/" + encodeURIComponent(c.acct) + "/otp",
+        { method: "POST", headers: { "Authorization": "Bearer " + c.pat, "Deriv-App-ID": c.app } });
+    } catch (e) {
+      T.connecting = false;
+      if (T.rcN < 6) { setT("err", "Reconnecting"); scheduleReconnect(); }
+      else { setT("err", "Offline"); tmsg("Cannot reach Deriv. Check your internet and tap Connect.", "bad"); $("connect").open = true; }
+      return;
+    }
+    var txt = await res.text(), j = null;
+    try { j = JSON.parse(txt); } catch (e) {}
+    T.connecting = false;
+    if (!res.ok) {
+      if (res.status >= 500 && T.rcN < 6) { scheduleReconnect(); return; }
+      T.creds = null; setT("err", "Rejected");
+      tmsg("Deriv replied " + res.status + ": " + txt.slice(0, 200) + " · App ID sent: " + c.app + " · account: " + c.acct + ". Check each one for typos.", "bad");
+      $("connect").open = true; return;
+    }
+    var url = j && j.data && j.data.url;
+    if (!url) { T.creds = null; setT("err", "Unexpected reply"); tmsg("Deriv did not return a link: " + txt.slice(0, 200), "bad"); return; }
+    saveNow();
+    if (c.live) $("patLive").value = "";
+    if (!openTrade(url)) T.creds = null;
+  }
+
+  function onTradeMsg(m) {
+    if (m.error) {
+      var er = m.echo_req || {};
+      if (er.forget) return;
+      if (er.buy) { T.busy = false; subscribeProps(true); }
+      tmsg((m.error.message || "Deriv returned an error.") + (m.error.code ? " (" + m.error.code + ")" : ""), "bad");
+      return;
+    }
+    if (m.msg_type === "balance" && m.balance) {
+      T.balance = Number(m.balance.balance); if (m.balance.currency) T.cur = m.balance.currency;
+      if (T.live) setT("real", "LIVE " + T.balance.toFixed(2) + " " + T.cur); else setT("live", "Demo " + T.balance.toFixed(2) + " " + T.cur);
+      if (!T.propsStarted) { T.propsStarted = true; subscribeProps(true); }
+    } else if (m.msg_type === "proposal" && m.proposal) {
+      onProposal(m);
+    } else if (m.msg_type === "buy" && m.buy) {
+      onBought(m.buy);
+    } else if (m.msg_type === "proposal_open_contract" && m.proposal_open_contract) {
+      onContract(m);
+    }
+  }
+
+  function onProposal(m) {
+    var rid = m.req_id != null ? m.req_id : (m.echo_req && m.echo_req.req_id);
+    if (rid == null || Math.floor(rid / 10) !== P.gen) {
+      if (m.subscription && m.subscription.id) tsend({ forget: m.subscription.id });
+      return;
+    }
+    var side = rid % 10 === 1 ? "over" : "under", p = m.proposal;
+    if (m.subscription && m.subscription.id) P.subs[side] = m.subscription.id;
+    P[side] = { id: p.id, ask: Number(p.ask_price), payout: Number(p.payout), stake: P.cfg.stake, bar: P.cfg.bar, ticks: P.cfg.ticks };
+    showPay();
+  }
+
+  function buy(side) { if (T.live) requestConfirm(side); else execBuy(side); }
+
+  var pendingSide = null, confTimer = null;
+  function hideConfirm() { pendingSide = null; clearTimeout(confTimer); var el = $("liveConfirm"); if (el) el.hidden = true; }
+  function requestConfirm(side) {
+    if (!T.ok) { tmsg("Connect your live account first.", "bad"); return; }
+    if (T.locked || T.busy) return;
+    var i = inputs();
+    if (i.err) { tmsg(i.err, "bad"); return; }
+    if ((side === "over" && i.bar > 8) || (side === "under" && i.bar < 1)) { tmsg("That barrier cannot win on this side.", "bad"); return; }
+    var p = P[side];
+    if (!p) { tmsg("Prices are loading. Tap again in a second.", ""); return; }
+    var chance = side === "over" ? (9 - i.bar) * 10 : i.bar * 10;
+    pendingSide = side;
+    $("lcText").textContent = "LIVE · " + (side === "over" ? "Buy · Over " : "Sell · Under ") + i.bar + " · " + i.ticks + " tick" + (i.ticks > 1 ? "s" : "") +
+      ". Cost " + p.ask.toFixed(2) + " " + T.cur + ", pays " + p.payout.toFixed(2) + " if it wins (" + chance + "% chance).";
+    $("liveConfirm").hidden = false;
+    clearTimeout(confTimer); confTimer = setTimeout(hideConfirm, 10000);
+  }
+
+  function execBuy(side) {
+    if (!T.ok) { tmsg("Connect your account first.", "bad"); return; }
+    if (T.locked || T.busy) return;
+    var i = inputs();
+    if (i.err) { tmsg(i.err, "bad"); return; }
+    if ((side === "over" && i.bar > 8) || (side === "under" && i.bar < 1)) { tmsg(side === "over" ? "Over 9 cannot win. Pick a lower barrier." : "Under 0 cannot win. Pick a higher barrier.", "bad"); return; }
+    var p = P[side];
+    if (!p) { tmsg("Prices are loading. Tap again in a second.", ""); return; }
+    if (p.stake !== i.stake || p.bar !== i.bar || p.ticks !== i.ticks) { tmsg("Settings just changed. Tap again in a second.", ""); subscribeProps(true); return; }
+    T.busy = true;
+    T.side = { kind: side, barrier: p.bar, ticks: p.ticks };
+    var maxPrice = Number((p.ask * 1.02 + 0.005).toFixed(2));
+    P[side] = null; showPay();
+    tsend({ buy: p.id, price: maxPrice });
+    tmsg("Buying…");
+  }
+
+  function onBought(b) {
+    T.busy = false;
+    var s = T.side || {};
+    var row = { id: b.contract_id, time: new Date(), label: (T.live ? "LIVE " : "") + (s.kind === "over" ? "Over " : "Under ") + s.barrier + " · " + s.ticks + "t",
+                stake: Number(b.buy_price), result: null };
+    T.rows.unshift(row); renderRows();
+    tmsg("Bought. Waiting for the result…", "ok");
+    tsend({ proposal_open_contract: 1, contract_id: b.contract_id, subscribe: 1 });
+    subscribeProps(true);
+  }
+
+  function onContract(m) {
+    var p = m.proposal_open_contract, row = null;
+    for (var i = 0; i < T.rows.length; i++) if (String(T.rows[i].id) === String(p.contract_id)) row = T.rows[i];
+    if (!row || row.result !== null) return;
+    var done = p.is_sold === 1 || p.is_sold === true || p.status === "won" || p.status === "lost";
+    if (!done) return;
+    var profit = Number(p.profit);
+    if (isNaN(profit) && p.sell_price != null) profit = Number(p.sell_price) - row.stake;
+    if (isNaN(profit)) profit = 0;
+    row.result = profit; T.pnl += profit;
+    if (m.subscription && m.subscription.id) tsend({ forget: m.subscription.id });
+    renderRows();
+    tmsg((profit >= 0 ? "Won " : "Lost ") + Math.abs(profit).toFixed(2) + " " + T.cur + ".", profit >= 0 ? "ok" : "bad");
+    if (T.pnl <= -num(T.live ? "liveLoss" : "lossLimit")) {
+      T.locked = true; tmsg("Session loss limit reached. Trading is paused. Reload the page to reset.", "bad");
+    }
+    refreshButtons();
+  }
+
+  function renderRows() {
+    var tb = $("rows"); tb.innerHTML = "";
+    T.rows.slice(0, 30).forEach(function (r) {
+      var tr = document.createElement("tr");
+      var t = r.time; var hh = ("0" + t.getHours()).slice(-2) + ":" + ("0" + t.getMinutes()).slice(-2) + ":" + ("0" + t.getSeconds()).slice(-2);
+      [hh, r.label, r.stake.toFixed(2), r.result === null ? "pending" : (r.result >= 0 ? "+" : "−") + Math.abs(r.result).toFixed(2)].forEach(function (v, i) {
+        var td = document.createElement("td"); td.textContent = v;
+        if (i === 3 && r.result !== null) td.className = r.result >= 0 ? "win" : "loss";
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    var done = T.rows.filter(function (r) { return r.result !== null; });
+    var wins = done.filter(function (r) { return r.result >= 0; }).length;
+    $("pnl").textContent = done.length ? "net " + (T.pnl >= 0 ? "+" : "−") + Math.abs(T.pnl).toFixed(2) + " · " + wins + " of " + done.length + " won" : "no trades yet";
+  }
+
+  /* ---------- practice positions (virtual) ---------- */
+  var V = { open: [], closed: [], seq: 0 };
+  function stepOf(d, b) { return d > b ? 1 : d < b ? -1 : 0; }
+  function practiceOpen(side) {
+    if (!state.digits.length) return;
+    V.open.push({ id: ++V.seq, side: side, b: state.barrier, openTotal: state.total, pl: 0, ticks: 0, vps: Number($("pVal").value) > 0 ? Number($("pVal").value) : 0.1 });
+    renderPractice(); drawChart();
+  }
+  function practiceClose(id, why) {
+    for (var i = 0; i < V.open.length; i++) {
+      if (V.open[i].id === id) { var p = V.open.splice(i, 1)[0]; p.why = why || "closed"; V.closed.unshift(p); break; }
+    }
+    renderPractice(); drawChart();
+  }
+  function practiceVoid() { V.open = []; renderPractice(); }
+  function practiceCloseAll(why) { V.open.forEach(function (p) { p.why = why; V.closed.unshift(p); }); V.open = []; }
+  function money(x) { return (x < 0 ? "−" : "") + "$" + Math.abs(x).toFixed(2); }
+  function practiceTick(d) {
+    if (!V.open.length) return;
+    var tp = Number($("pTP").value), sl = Number($("pSL").value), done = [];
+    V.open.forEach(function (p) {
+      p.pl += p.side * stepOf(d, p.b); p.ticks++;
+      if (tp > 0 && p.pl >= tp) done.push([p.id, "take profit"]);
+      else if (sl > 0 && p.pl <= -sl) done.push([p.id, "stop loss"]);
+    });
+    done.forEach(function (x) { practiceClose(x[0], x[1]); });
+  }
+  function fmtSteps(x) { return (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x); }
+  function renderPractice() {
+    var tb = $("pRows"); if (!tb) return;
+    tb.innerHTML = "";
+    V.open.forEach(function (p) {
+      var tr = document.createElement("tr");
+      [(p.side > 0 ? "Buy" : "Sell") + " · Over/Under " + p.b, String(p.ticks), fmtSteps(p.pl) + " · " + money(p.pl * p.vps)].forEach(function (v, i) {
+        var td = document.createElement("td"); td.textContent = v;
+        if (i === 2) td.className = p.pl > 0 ? "win" : p.pl < 0 ? "loss" : "";
+        tr.appendChild(td);
+      });
+      var tdb = document.createElement("td"), btn = document.createElement("button");
+      btn.type = "button"; btn.className = "pos-close"; btn.textContent = "Close"; btn.setAttribute("data-id", p.id);
+      tdb.appendChild(btn); tr.appendChild(tdb); tb.appendChild(tr);
+    });
+    if (!V.open.length) { var e = document.createElement("tr"), ed = document.createElement("td"); ed.colSpan = 4; ed.textContent = "No open practice positions."; e.appendChild(ed); tb.appendChild(e); }
+    var net = 0, netUsd = 0, wins = 0; V.closed.forEach(function (p) { net += p.pl; netUsd += p.pl * p.vps; if (p.pl > 0) wins++; });
+    $("pSum").textContent = V.closed.length
+      ? "Closed " + V.closed.length + " · net " + fmtSteps(net) + " steps (" + money(netUsd) + ") · " + wins + " won. 1 step = one Over tick (+1) or Under tick (−1)."
+      : "1 step = one Over tick (+1) or one Under tick (−1) on the chart. A Buy gains when the line rises, a Sell gains when it falls.";
+  }
+
+  /* ---------- barrier ---------- */
+  function updateLabels() {
+    var b = state.barrier;
+    $("chartTitle").textContent = state.mode === "walk" ? "Walk: +1 over " + b + " / −1 under " + b : "Last digit, 0 to 9";
+    $("lOver").textContent = "Over " + b + (b < 9 ? " (" + (b + 1) + (b + 1 < 9 ? "–9" : "") + ")" : " (none)");
+    $("lUnder").textContent = "Under " + b + (b > 0 ? " (" + (b > 1 ? "0–" + (b - 1) : "0") + ")" : " (none)");
+    $("lEq").textContent = "Exactly " + b;
+    $("lgU").textContent = "Over " + b; $("lgD").textContent = "Under " + b; $("lgF").textContent = "Equal";
+    Array.prototype.forEach.call($("barrierChips").children, function (c) { c.setAttribute("aria-pressed", Number(c.getAttribute("data-b")) === b ? "true" : "false"); });
+  }
+  function setBarrier(b) {
+    practiceCloseAll("barrier changed");
+    state.barrier = b; $("barrier").value = b;
+    updateLabels(); labelButtons(); render(); subscribeProps(); saveNow();
+  }
+  var chipBox = $("barrierChips");
+  for (var cd = 0; cd <= 9; cd++) {
+    var cb = document.createElement("button"); cb.type = "button"; cb.textContent = cd; cb.setAttribute("data-b", cd); cb.setAttribute("aria-pressed", "false");
+    chipBox.appendChild(cb);
+  }
+  chipBox.addEventListener("click", function (e) { var t = e.target.closest("button"); if (t) setBarrier(Number(t.getAttribute("data-b"))); });
+  $("pBuy").addEventListener("click", function () { practiceOpen(1); });
+  $("pSell").addEventListener("click", function () { practiceOpen(-1); });
+  $("tradeSeg").addEventListener("click", function (e) {
+    var tb = e.target.closest("button"); if (!tb) return;
+    state.tmode = tb.getAttribute("data-t"); pressSeg("tradeSeg", "data-t", state.tmode);
+    showPay(); refreshButtons(); tmsg(""); saveNow();
+  });
+  $("pRows").addEventListener("click", function (e) { var t = e.target.closest("button"); if (t) practiceClose(Number(t.getAttribute("data-id")), "closed by you"); });
+  ["pTP", "pSL", "pVal"].forEach(function (id) { $(id).addEventListener("input", saveNow); });
+
+  /* ---------- controls ---------- */
+  var sel = $("market");
+  MARKETS.forEach(function (m) { var o = document.createElement("option"); o.value = m[0]; o.textContent = m[1]; sel.appendChild(o); });
+  if (!MARKETS.some(function (m) { return m[0] === state.symbol; })) state.symbol = "R_100";
+  sel.value = state.symbol;
+  sel.addEventListener("change", function () {
+    practiceVoid(); state.symbol = sel.value; state.digits = []; state.price = null; state.offset = 0; state.cursorAgo = null; state.failures = 0; render(); connect(); subscribeProps(); saveNow();
+  });
+
+  function seg(id, attr, cb) {
+    $(id).addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      Array.prototype.forEach.call($(id).children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      cb(b.getAttribute(attr)); saveNow();
+    });
+  }
+  seg("winSeg", "data-n", function (v) { state.win = Number(v); render(); });
+  seg("modeSeg", "data-m", function (v) {
+    state.mode = v;
+    updateLabels();
+    drawChart();
+  });
+
+  $("btnConnect").addEventListener("click", function () { tokenConnect(false); });
+  $("btnConnectUrl").addEventListener("click", function () {
+    var u = $("otpUrl").value.trim(); $("otpUrl").value = "";
+    clearTimeout(T.rcTimer);
+    if (/\/ws\/real/.test(u)) { T.creds = { live: true, noRefresh: true }; if (!openTrade(u)) T.creds = null; }
+    else { T.creds = null; openTrade(u); }
+  });
+  $("btnForget").addEventListener("click", function () {
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    $("pat").value = ""; $("remember").checked = false; T.creds = null; clearTimeout(T.rcTimer);
+    tmsg("Saved token and settings removed from this device.", "ok");
+  });
+  $("remember").addEventListener("change", saveNow);
+  if ($("liveUnlock")) $("liveUnlock").addEventListener("click", function () {
+    if ($("liveType").value.trim() === "LIVE") {
+      $("liveFields").hidden = false; $("liveType").value = "";
+      $("liveMsg").textContent = "Unlocked for this visit only. It locks again when you reload the page.";
+    } else { $("liveMsg").textContent = "Type LIVE in capital letters to unlock."; }
+  });
+  $("btnConnectLive").addEventListener("click", function () { tokenConnect(false, true); });
+  $("btnLiveUrl").addEventListener("click", function () {
+    var u = $("liveUrl").value.trim(); $("liveUrl").value = "";
+    clearTimeout(T.rcTimer); T.creds = { live: true, noRefresh: true };
+    if (!openTrade(u)) T.creds = null;
+  });
+  $("btnDisc").addEventListener("click", function () {
+    T.creds = null; clearTimeout(T.rcTimer); hideConfirm();
+    if (T.ws) { try { T.ws.close(); } catch (e) {} } else { setT("err", "Disconnected"); }
+  });
+  $("lcGo").addEventListener("click", function () { var sd = pendingSide; hideConfirm(); if (sd) execBuy(sd); });
+  $("lcNo").addEventListener("click", function () { hideConfirm(); tmsg("Cancelled."); });
+  $("btnOver").addEventListener("click", function () { if (state.tmode === "chart") practiceOpen(1); else buy("over"); });
+  $("btnUnder").addEventListener("click", function () { if (state.tmode === "chart") practiceOpen(-1); else buy("under"); });
+  ["stake", "barrier", "ticks", "maxStake", "lossLimit", "appId", "acctId"].forEach(function (id) {
+    $(id).addEventListener("input", function () {
+      if (id === "barrier") labelButtons();
+      if (id === "stake" || id === "barrier" || id === "ticks" || id === "maxStake") subscribeProps();
+      saveNow();
+    });
+  });
+  $("pat").addEventListener("input", function () { if ($("remember").checked) saveNow(); });
+  labelButtons();
+
+  /* Drag sideways to look back, tap a point to read it. */
+  var drag = null;
+  canvas.addEventListener("pointerdown", function (e) {
+    drag = { x: e.clientX, off: state.offset, moved: false };
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 6) drag.moved = true;
+    if (!drag.moved) return;
+    var r = canvas.getBoundingClientRect(), ppt = Math.max(1, (r.width - 50) / Math.max(1, state.win - 1));
+    state.offset = clampOffset(drag.off + Math.round(dx / ppt));
+    drawChart();
+  });
+  function endDrag(e, cancelled) {
+    if (drag && !drag.moved && !cancelled) {
+      var r = canvas.getBoundingClientRect(), vr = viewRange(), n = vr.end - vr.start;
+      if (n > 1) {
+        var i = Math.round((e.clientX - r.left - 34) / (r.width - 50) * (n - 1));
+        i = Math.max(0, Math.min(n - 1, i));
+        var ago = state.digits.length - 1 - (vr.start + i);
+        state.cursorAgo = state.cursorAgo === ago ? null : ago;
+        drawChart();
+      }
+    }
+    drag = null;
+  }
+  canvas.addEventListener("pointerup", function (e) { endDrag(e, false); });
+  canvas.addEventListener("pointercancel", function (e) { endDrag(e, true); });
+  $("navBack").addEventListener("click", function () { state.offset = clampOffset(state.offset + Math.ceil(state.win / 2)); drawChart(); });
+  $("navFwd").addEventListener("click", function () { state.offset = clampOffset(state.offset - Math.ceil(state.win / 2)); drawChart(); });
+  $("navLive").addEventListener("click", function () { state.offset = 0; state.cursorAgo = null; drawChart(); });
+
+  window.addEventListener("resize", drawChart);
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    if (!state.sim && (!state.ws || state.ws.readyState > 1)) connect();
+    if (T.creds && !T.creds.noRefresh && !T.ok && !T.connecting) { T.rcN = 0; tokenConnect(true); }
+  });
+
+  updateLabels(); labelButtons();
+  render();
+  connect();
+
+  /* Connect automatically when a token was remembered. */
+  if (saved.remember && saved.pat && (saved.acctId || $("acctId").value) && (saved.appId || $("appId").value)) {
+    T.creds = { pat: saved.pat, app: $("appId").value.trim(), acct: $("acctId").value.trim() };
+    setTimeout(function () { tokenConnect(true); }, 400);
+  }
+})();
+</script>
+</body>
+</html>
